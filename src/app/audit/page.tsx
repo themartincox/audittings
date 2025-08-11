@@ -36,6 +36,8 @@ type AuditPayload = {
     best?: { label: string; value: string; sourceUrl?: string } | null;
     ownerCandidates?: Array<{ name?: string; title?: string; source?: string; sourceUrl?: string; confidence?: number }>;
   };
+  // TEMP: debug field surfaced by API to explain PSI failures
+  pagespeedDebug?: { mobileError?: string | null; desktopError?: string | null };
 };
 
 /* UI helpers */
@@ -57,14 +59,11 @@ function ScoreRing({ value, size = 84 }: { value: number; size?: number }) {
     <svg width={size} height={size} viewBox="0 0 100 100" className="overflow-visible">
       <circle cx="50" cy="50" r="36" className="stroke-gray-200" strokeWidth="10" fill="none" />
       <circle
-        cx="50"
-        cy="50"
-        r="36"
+        cx="50" cy="50" r="36"
         className="stroke-current text-blue-600"
         strokeDasharray={`${dash} ${circumference - dash}`}
         strokeLinecap="round"
-        strokeWidth="10"
-        fill="none"
+        strokeWidth="10" fill="none"
         transform="rotate(-90 50 50)"
       />
       <text x="50" y="54" textAnchor="middle" className="fill-gray-900 font-semibold text-xl">
@@ -79,9 +78,7 @@ function normalizeOrigin(input: string): string | null {
   try {
     const u = new URL(input.startsWith("http") ? input : `https://${input}`);
     return new URL(u.origin).toString();
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 function parseMulti(input: string): string[] {
   const raw = input.split(/\r?\n|,|\s/).map((s) => s.trim()).filter(Boolean);
@@ -128,11 +125,7 @@ function Disclosure({ title, children, defaultOpen = false }: { title: React.Rea
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="border rounded-xl">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left"
-      >
+      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between px-4 py-3 text-left">
         <span className="font-medium">{title}</span>
         <span className="text-gray-500">{open ? "–" : "+"}</span>
       </button>
@@ -161,20 +154,17 @@ export default function AuditPage() {
     setResults(null);
 
     const list = parsed;
-    if (!list.length) {
-      setError("Please add at least one valid URL");
-      return;
-    }
+    if (!list.length) { setError("Please add at least one valid URL"); return; }
 
     if (useSample) {
       const sample: AuditPayload = {
         target: "https://example.com",
         summary: { overall: 86, grade: "B" },
         categories: [
-          { id: "technical_seo", score: 90, weighted: 31.5 },
-          { id: "onpage_seo", score: 78, weighted: 27.3 },
-          { id: "entity_trust", score: 74, weighted: 14.8 },
-          { id: "hygiene", score: 92, weighted: 9.2 },
+          { id: "technical_seo", score: 90, weighted: 32 },
+          { id: "onpage_seo", score: 78, weighted: 27 },
+          { id: "entity_trust", score: 74, weighted: 15 },
+          { id: "hygiene", score: 92, weighted: 9 },
         ],
         issues: [
           { id: "heading_hierarchy", status: "warn", details: { order: ["H1", "H3", "H2"] }, fix: "Use logical H2/H3 order", page: "https://example.com" },
@@ -212,8 +202,8 @@ export default function AuditPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-6xl px-4 py-10">
+    <main className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="mx-auto max-w-6xl px-4 py-10 w-full">
         <header className="mb-8">
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-gray-900">SEO Auditor</h1>
           <p className="mt-2 text-gray-600">
@@ -295,9 +285,20 @@ export default function AuditPage() {
                       <div className="rounded-xl border p-4">
                         <div className="text-sm text-gray-500">Scores</div>
                         <div className="mt-2 flex gap-6">
-                          <div className="text-center"><div className="text-xs text-gray-500">Mobile</div><div className="text-2xl font-semibold">{res.pagespeed?.mobileScore ?? "—"}</div></div>
-                          <div className="text-center"><div className="text-xs text-gray-500">Desktop</div><div className="text-2xl font-semibold">{res.pagespeed?.desktopScore ?? "—"}</div></div>
+                          <div className="text-center">
+                            <div className="text-xs text-gray-500">Mobile</div>
+                            <div className="text-2xl font-semibold">{res.pagespeed?.mobileScore ?? "—"}</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-xs text-gray-500">Desktop</div>
+                            <div className="text-2xl font-semibold">{res.pagespeed?.desktopScore ?? "—"}</div>
+                          </div>
                         </div>
+                        {(res as any).pagespeedDebug?.mobileError || (res as any).pagespeedDebug?.desktopError ? (
+                          <p className="mt-2 text-xs text-red-600">
+                            {(res as any).pagespeedDebug?.mobileError || (res as any).pagespeedDebug?.desktopError}
+                          </p>
+                        ) : null}
                       </div>
                       <div className="md:col-span-2 rounded-xl border p-4">
                         <div className="text-sm text-gray-500 mb-2">Top Actions</div>
@@ -387,12 +388,7 @@ export default function AuditPage() {
                                   <span className="font-medium">{c.name}</span>
                                   {c.title ? <span className="text-gray-600"> — {c.title}</span> : null}
                                   {c.sourceUrl ? (
-                                    <>
-                                      {" "}
-                                      <a className="text-blue-600 hover:underline" href={c.sourceUrl} target="_blank" rel="noreferrer">
-                                        source
-                                      </a>
-                                    </>
+                                    <> <a className="text-blue-600 hover:underline" href={c.sourceUrl} target="_blank" rel="noreferrer">source</a> </>
                                   ) : null}
                                 </li>
                               ))}
@@ -401,7 +397,6 @@ export default function AuditPage() {
                         ) : null}
                       </div>
                     </Disclosure>
-                  )}
                 </div>
               </div>
             ))}
@@ -414,6 +409,16 @@ export default function AuditPage() {
           </div>
         )}
       </div>
+
+      {/* Footer with backlink */}
+      <footer className="mt-auto border-t bg-white">
+        <div className="mx-auto max-w-6xl px-4 py-6 text-sm text-gray-600">
+          Delivered by{" "}
+          <a href="https://postino.cc" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+            Postino — Growth, AI &amp; Automation Solution Experts
+          </a>.
+        </div>
+      </footer>
     </main>
   );
 }
